@@ -4,28 +4,37 @@
 #include <sys/wait.h>
 #include <string.h>
 #include <strings.h>
-#include <signal.h>
-#include <sys/types.h>
 
 #include "input_prompt.h"
 
 #define INPUT_BUFFER_LEN 32
 
 // Function Prototypes
-void blocking_convert_to_thumbnail(char *image, char *name);
+void blocking_convert_to_thumbnail(const char *image, const char *name);
 
-int display_image(char *image);
+int display_image(const char *image);
 
-void convert_to_medium_output(char *image, char *name, int rotate_degrees);
+void convert_to_medium_output(const char *image, const char *name, const int rotate_degrees);
 
 int rotation_prompt();
 
-void strip_image_name(char *name, char *image_path);
+void strip_image_name(char *name, const char *image_path);
+
+void print_image(FILE *fp, const char* md_image, const char* tb_image, const char* caption);
 
 int main(int argc, char *argv[]) {
 
 	//TODO: handle case for no files matched
 
+	FILE *fp;
+	fp = fopen("index.html", "w");
+	if (NULL == fp) {
+		printf("Error opening index.html\n");
+		exit(-1);
+	}
+
+	fprintf(fp, "<html>\n");
+	fprintf(fp, "<h1>Photo Album<h1>\n");
 	for (int i = 1; i < argc; i++) {
 		char *image = argv[i];
 		char base_name[strlen(image)];
@@ -45,11 +54,22 @@ int main(int argc, char *argv[]) {
 
 		convert_to_medium_output(image, md_name, rotate_degrees);
 
+		char caption[INPUT_BUFFER_LEN];
+		input_string("Enter caption for image", caption, INPUT_BUFFER_LEN);
+		print_image(fp, md_name, tb_name, caption);
+
 		int status;
 		waitpid(display_pid, &status, 0); // Wait for image to close before progressing
 	}
+	fprintf(fp, "</html>");
+	fclose(fp);
 
 	return 0;
+}
+
+void print_image(FILE *fp, const char* md_image, const char* tb_image, const char* caption) {
+	fprintf(fp, "<h2>%s</h2>\n", caption);
+	fprintf(fp, "<a href=\"%s\"><img src=\"%s\" border=\"1\"></a>\n", tb_image, md_image);
 }
 
 int rotation_prompt() {
@@ -72,19 +92,20 @@ int rotation_prompt() {
 	return -1; //should never get here
 }
 
-void convert_to_medium_output(char *image, char *name, int rotate_degrees) {
+void convert_to_medium_output(const char *image, const char *output_name, const int rotate_degrees) {
 	int rc = fork();
 	if (0 == rc) {
-		int cs = execlp("/usr/bin/convert", "convert", "-geometry", "25\%", "-rotate", rotate_degrees, image, name, NULL);
-		printf("Failed to create output image: %d\n", cs);
-		exit(-1); //TODO: error message
+		char rotate_str[3];
+		sprintf(rotate_str, "%d", rotate_degrees);
+		int cs = execlp("convert", "convert", "-geometry", "25\%", "-rotate", rotate_str, image, output_name, NULL);
+		perror("Failed to create medium image");
 	}
 }
 
-void blocking_convert_to_thumbnail(char *image, char *name) {
+void blocking_convert_to_thumbnail(const char *image, const char *output_name) {
 	int rc = fork();
 	if (0 ==rc) {
-		int cs = execlp("/usr/bin/convert", "convert", "-geometry", "10\%", image, name, NULL);
+		int cs = execlp("convert", "convert", "-geometry", "10\%", image, output_name, NULL);
 		exit(-1); //TODO: error message
 	} else {
 		int status;
@@ -93,17 +114,17 @@ void blocking_convert_to_thumbnail(char *image, char *name) {
 }
 
 // Return the child process pid so it can be killed when necessary.
-int display_image(char *image) {
+int display_image(const char *image) {
 	int rc = fork();
 	if (0 == rc) {
-		int es = execlp("/usr/bin/display", "display", image, NULL);
+		int es = execlp("display", "display", image, NULL);
 		return -1; //TODO: error message
 	} else {
 		return rc;
 	}
 }
 
-void strip_image_name(char *name, char *image_path) {
+void strip_image_name(char *name, const char *image_path) {
 	char *last_slash = strrchr(image_path, '/');
 	++last_slash; // Advance past '/'
 	strcpy(name, last_slash);
