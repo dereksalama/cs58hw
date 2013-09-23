@@ -1,4 +1,8 @@
-// Adapted from proj1 demo.c
+// input_prompt.c
+// CS58 Programming Project 1
+// Adapted from proj1 demo.c by Derek Salama
+
+// Basic function to prompt user for input in the terminal.
 #include <stdio.h>
 #include <string.h>
 
