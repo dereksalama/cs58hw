@@ -108,25 +108,30 @@ void print_image(FILE *fp, const char* md_image, const char* tb_image,
 }
 
 int rotation_prompt() {
-  char buffer[INPUT_BUFFER_LEN];
+  char* buffer = calloc(INPUT_BUFFER_LEN, sizeof(char));
+  int degrees = 0;
   while (1) {
     input_string(
       "Rotate image? (c (clockwise)/cc (counterclockwise)/f (flip)/ n)",
        buffer, INPUT_BUFFER_LEN);
     if (0 == strcasecmp(buffer, "c")) {
-      return 90;
+      degrees = 90;
+      break;
     } else if (0 == strcasecmp(buffer, "cc")) {
-      return 270;
+      degrees = 270;
+      break;
     } else if (0 == strcasecmp(buffer, "f")) {
-      return 180;
-    } else if (0 == strcasecmp(buffer, "n")) {
-      return 0;
+      degrees = 180;
+      break;
+    } else if (0 != strcasecmp(buffer, "n")) {
+      break;
     } else {
       printf("%s\n", "Invalid input.");
     }
   }
 
-  return -1; //should never get here
+  free(buffer);
+  return degrees;
 }
 
 void convert_to_medium_output(const char *image, const char *output_name, 
