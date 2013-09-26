@@ -9,3 +9,7 @@ Once the program is running, you will have the option to rotate each thumbnail a
 
 Note on concurrency decisions:
 My program blocks when creating original display thumbnail, since we must wait until it is ready before the image can be shown. The performance seems good enough that I cannot justify the additional complexity of, say, batch processing the thumbnails on launch. Otherwise, I rotate the thumbnail and create the medium image asynchronously, as there is no reason to make the user wait for those. When the program ends, I check to make sure all child processes are complete before prompting the user that index.html is ready.
+
+Files:
+album.c - contains main() function and all helper functions related to showing and processing images
+input_prompt.c & h - contains a single function for prompting the user and copying input into a buffer
