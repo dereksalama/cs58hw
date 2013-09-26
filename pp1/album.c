@@ -50,8 +50,6 @@ void print_image(FILE *fp, const char* md_image, const char* tb_image,
 
 int main(int argc, char *argv[]) {
 
-  //TODO: handle case for no files matched
-
   FILE *fp;
   fp = fopen("index.html", "w");
   if (NULL == fp) {
@@ -81,10 +79,11 @@ int main(int argc, char *argv[]) {
 
     convert_to_medium_output(image, md_name, rotate_degrees);
 
-    char caption[INPUT_BUFFER_LEN];
+    char *caption = calloc(INPUT_BUFFER_LEN, sizeof(char));
     input_string("Enter caption for image", caption, INPUT_BUFFER_LEN);
     print_image(fp, md_name, tb_name, caption);
-    kill (display_pid, SIGTERM);
+    free(caption);
+    kill(display_pid, SIGTERM);
 
     // Wait until after we kill the display rotate the image, since replacing
     // the source file seems to mess with the display process.
@@ -123,7 +122,7 @@ int rotation_prompt() {
     } else if (0 == strcasecmp(buffer, "f")) {
       degrees = 180;
       break;
-    } else if (0 != strcasecmp(buffer, "n")) {
+    } else if (0 == strcasecmp(buffer, "n")) {
       break;
     } else {
       printf("%s\n", "Invalid input.");
