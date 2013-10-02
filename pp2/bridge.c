@@ -1,3 +1,12 @@
+/*
+bridge.h
+Derek Salama
+CS58 Programming Project 2
+10/3/2013
+
+Contains main() (and everything else) for PP2.
+*/
+#define _POSIX_SOURCE // rand_r
 #include "bridge.h"
 
 #include <stdlib.h>
@@ -5,12 +14,11 @@
 #include <errno.h>
 #include <stdio.h>
 
-const int MAX_CARS = 4;
-
-bridge_t BRIDGE = { PTHREAD_MUTEX_INITIALIZER, {PTHREAD_COND_INITIALIZER, PTHREAD_COND_INITIALIZER}, {0, 0}};
+bridge_t BRIDGE = { PTHREAD_MUTEX_INITIALIZER, {PTHREAD_COND_INITIALIZER, 
+	PTHREAD_COND_INITIALIZER}, {0, 0}};
 
 int main(int argc, char * argv[]) {
-	if (argc != 2) {
+	if (argc != 3) {
 		printf("%s\n", USAGE);
 		exit(1);
 	}
@@ -30,42 +38,34 @@ int main(int argc, char * argv[]) {
 		exit(1);
 	}
 
+	int num_tries = strtol(argv[2], NULL, 10);
 
-	/*
-	printf("%s\n", DIR_STRING[TO_HANOVER]);
-	printf("%s\n", DIR_STRING[OtherDirection(TO_HANOVER)]);
-	printf("%s\n", DIR_STRING[TO_NORWICH]);
-	printf("%s\n", DIR_STRING[OtherDirection(TO_NORWICH)]);
-	*/
-
-	/*
-	pthread_t test;
-	int rc;
-	int direction = TO_HANOVER;
-	rc = pthread_create(&test, NULL, OneVehicle, (void *) direction);
-	if (rc) {
-		printf("Error creating thread.\n");
-		exit(-1);
+	// Check for strtol parse errors
+	if ((errno == ERANGE) || (errno != 0 && MAX_CARS == 0)) {
+		printf("Error parsing num_tries.\n");
+		printf("%s\n", USAGE);
+		exit(1);
 	}
-	pthread_join(test, NULL);
-	*/
-	for (unsigned int i = 0; i < 3; i++) {
-		RandomArrivals(i, num_cars);
+
+	for (int i = 0; i < num_tries; i++) {
+		RandomArrivals(i * i, num_cars);
 	}
 
 	pthread_mutex_destroy(&BRIDGE.m);
 	exit(EXIT_SUCCESS);
 }
 
-void RandomArrivals(unsigned int _seed, const int num_cars) {
+void RandomArrivals(int _seed, const int _num_cars) {
 	printf("======= STARTING WITH SEED %d ========\n", _seed);
+	unsigned int seed = _seed;
+	unsigned int num_cars = _num_cars;
 	pthread_t cars[num_cars];
-	int seed = _seed;
+	thread_args_t args[num_cars];
 	for (int i = 0; i < num_cars; i++) {
-		int args[3];
-		args[0] = rand_r(&seed) % 2; // DIRECTION
-		args[1] = (rand_r(&seed) % MAX_SLEEP) + 1; // TRAVEL TIME
-		int rc = pthread_create(&cars[i], NULL, OneVehicle, (void *) args);
+		args[i].direction = rand_r(&seed) % 2;
+		args[i].travel_time = (rand_r(&seed) % MAX_SLEEP) + 1;
+		args[i].id = i;
+		int rc = pthread_create(&cars[i], NULL, OneVehicle, (void *) &args[i]);
 		if (rc) {
 			printf("Error creating thread.\n");
 			exit(-1);
@@ -78,48 +78,54 @@ void RandomArrivals(unsigned int _seed, const int num_cars) {
 }
 
 void *OneVehicle(void * _args) {
-	int *args = (int *) _args;
-	const int direction = args[0];
-	const int travel_time = args[1];
-	ArriveBridge(direction);
-	OnBridge(direction);
-	sleep(travel_time);
-	ExitBridge(direction);
+	thread_args_t *args = (thread_args_t *) _args;
+	ArriveBridge(args->direction, args->id);
+	OnBridge(args->direction, args->id);
+	sleep(args->travel_time);
+	ExitBridge(args->direction, args->id);
 
 	pthread_exit(NULL);
 }
 
-void ArriveBridge(const int direction) {
-	printf("Car arrived at bridge towards %s.\n", DIR_STRING[direction]);
+/* Blocks until car can get on bridge. */
+void ArriveBridge(const int direction, const int id) {
 	pthread_mutex_lock(&BRIDGE.m);
-	while ((BRIDGE.cars[OtherDirection(direction)] > 0) || (BRIDGE.cars[direction] >= MAX_CARS)) {
-		/*
-		printf("-----Arrived, can't embark.\n");
-		printf("-----Bridge State: \n\t %d car(s) to Hanover \n\t %d car(s) to Norwich\n", BRIDGE.cars[TO_HANOVER], BRIDGE.cars[TO_NORWICH]);
-		*/
+	printf("Car %d arrived at bridge towards %s.\n", id, DIR_STRING[direction]);
+	++(BRIDGE.cars_waiting[direction]);
+	/* Wait if there are too many cars or one from other direction. */
+	while ((BRIDGE.cars_on_bridge[OtherDirection(direction)] > 0) || 
+			(BRIDGE.cars_on_bridge[direction] >= MAX_CARS)) {
 		pthread_cond_wait(&BRIDGE.cvars[direction], &BRIDGE.m);
 	}
-	++(BRIDGE.cars[direction]);
+	/* Can now get on bridge. */
+	--(BRIDGE.cars_waiting[direction]);
+	++(BRIDGE.cars_on_bridge[direction]);
 	pthread_mutex_unlock(&BRIDGE.m);
 }
 
-void OnBridge(const int direction) {
-	pthread_mutex_lock(&BRIDGE.m);
-	printf("Car on bridge to %s.\n", DIR_STRING[direction]);
-	printf("Bridge State: \n\t %d car(s) to Hanover \n\t %d car(s) to Norwich\n", BRIDGE.cars[TO_HANOVER], BRIDGE.cars[TO_NORWICH]);
-	if (BRIDGE.cars[TO_NORWICH] && BRIDGE.cars[TO_HANOVER]) {
+void OnBridge(const int direction, const int id) {
+	pthread_mutex_lock(&BRIDGE.m); // Lock to gauruntee conistant state
+	printf("Car %d on bridge to %s.\n", id, DIR_STRING[direction]);
+	printf("Bridge State: \n\t %d car(s) to Hanover \n\t %d car(s) to Norwich\n", 
+		BRIDGE.cars_on_bridge[TO_HANOVER], BRIDGE.cars_on_bridge[TO_NORWICH]);
+	printf("\t %d car(s) waiting to go to Hanover \n\t %d car(s) waiting to go to Norwich\n", 
+		BRIDGE.cars_waiting[TO_HANOVER], BRIDGE.cars_waiting[TO_NORWICH]);
+	if (BRIDGE.cars_on_bridge[TO_NORWICH] && BRIDGE.cars_on_bridge[TO_HANOVER]) {
 		printf("ERROR: COLLISION!!");
 	}
 	pthread_mutex_unlock(&BRIDGE.m);
 }
 
-void ExitBridge(const int direction) {
+void ExitBridge(const int direction, const int id) {
 	pthread_mutex_lock(&BRIDGE.m);
-	--(BRIDGE.cars[direction]);
-	printf("Car to %s disembarked.\n", DIR_STRING[direction]);
-	if (BRIDGE.cars[direction] == 0) {
-		pthread_cond_signal(&BRIDGE.cvars[OtherDirection(direction)]);
+	--(BRIDGE.cars_on_bridge[direction]);
+	printf("Car %d to %s disembarked.\n", id, DIR_STRING[direction]);
+	/* If no more cars in this direction, wake all cars in other direction. */
+	if (BRIDGE.cars_on_bridge[direction] == 0) {
+		pthread_cond_broadcast(&BRIDGE.cvars[OtherDirection(direction)]);
 	}
+	/* Wake one car in this directiom. If it was waiting, the bridge must have
+	   been full, so at most one new car can get on. */
 	pthread_cond_signal(&BRIDGE.cvars[direction]);
 	pthread_mutex_unlock(&BRIDGE.m);
 }
