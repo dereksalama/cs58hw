@@ -1,0 +1,10 @@
+Derek Salama
+CS58
+Programming Project 2
+10/3/2013
+
+To execute my program, run ./album num_cars num_tries, where num_cars is the total number of threads that will cross the bridge and num_tries is the number of times to run the program, each with a different random seed. Each "try" randomly generates arrival sides and "travel time" (i.e., how long sleep on bridge).
+
+My program avoids race condition by having every thread acquire the mutex before interacting with the bridge. I also use condition variables representing cars waiting on each side of the bridge. Without these synchronization stategies, two possible race conditions are:
+1) Car A arrives towards Norwich, and sees the bridge is empty. Car B arrives towards Hanover, and sees the brige is empty. Car A increments the number of cars towards Norwich. Car B increments the number of cars towards Hanover. Now the invariant that cars on the bridge may only be traveling in one direction has been violated.
+2) Car A arrives towards Hanover, and sees MAX_CARS - 1 on the bridge towards Hanover. Car B arrives towards Hanover, and sees MAX_CARS - 1 on the bridge towards Hanover. Car A increments the number of cars towards Hanover. Car B increments the number of cars towards Hanover. Now the invariant that <= MAX_CARS are on the bridge at a time has been violated.
